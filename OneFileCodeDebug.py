@@ -33,7 +33,7 @@ def ordoner_points(points_redressement):  # Renvoie les points ordones necessair
     return [haut_gauche, haut_droite, bas_gauche, bas_droite]
 
 
-def four_point_transform(image, pts,hauteur_mm,largeur_mm):  # renvoie l'image redresseee
+def four_point_transform(image, pts, hauteur_mm, largeur_mm):  # renvoie l'image redresseee
     # ratio=ratio hauteur/largeur reele en mm
     print(hauteur_mm, largeur_mm)
     ratio = float(float(hauteur_mm) / float(largeur_mm))
@@ -77,36 +77,39 @@ def conversion_hauteur(y, Ay=1, By=0):
 
 
 # region parametres du programme
-rayon_cercle_mm = 38
+
+# initialisation des variables pour eviter les erreurs dans l'ide (a cause du exec)
+rayon_cercle_mm = None
 # A MODIFIER !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-hauteur_mm, largeur_mm = 586, 380  # hauteur et largeur de la zone redressee en mm
-decalage_redressement_robot = 131  # distance entre le debut de l'image redressee et la base du robot //modifier et mettre centre du robot
-resize_rate = 0.35  # Taux de compression de l'image : image_init * resize_rate=image_finale
+hauteur_mm, largeur_mm = None, None  # hauteur et largeur de la zone redressee en mm
+decalage_redressement_robot = None  # distance entre le debut de l'image redressee et la base du robot //modifier et mettre centre du robot
+resize_rate = None  # Taux de compression de l'image : image_init * resize_rate=image_finale
 
+haut_gauche, haut_droite, bas_gauche, bas_droite = None, None, None, None
+rayon_cercle_px = None  # rayon du cercle sur l'image redressee
+
+seuils_detection = [None, None, None]  # B,G,R plus c'est eleve plus la hough gradient transform va detecter de cercles
+
+aire_detection_contour = None  # Aire min, AireMax 0.75 coeff rectificateur, 0.8/1.2 : +- 20%
+
+seuil_thresh = None  # seuil pour le thresh qui met 0 ou 255 pour chaque composante rgb
+
+
+#import des parametres
 try:
-    haut_gauche, haut_droite, bas_gauche, bas_droite = ([int(i[0] * resize_rate), int(i[1] * resize_rate)] for i in
-                                                        ordoner_points(np.loadtxt('calibration.txt',
-                                                                                  dtype='int').tolist()))  # recuperation dans un fichier texte des 4 points necessaires pour redresser.#   /!\ IL S'AGIT DE POINTS PRIS SUR L'IMAGE DEJA REDRESSEE  /!\
+    file = open('parametres_programme.txt', 'r')
+    constantes = file.read()
+    file.close()
+    exec(constantes)
 except:
-    haut_gauche, haut_droite, bas_gauche, bas_droite = ordoner_points([[int(0*resize_rate), int(resize_rate*2370)], [int(resize_rate*879), int(resize_rate*89)], [int(resize_rate*2312), int(resize_rate*101)], [int(resize_rate*3277), int(resize_rate*2327)]])
+    raise Exception("Erreur dans l'import des parametres")
 
-rayon_cercle_px = rayon_cercle_mm * int(
-    np.sqrt(((bas_droite[0] - bas_gauche[0]) ** 2) + (
-            (bas_droite[1] - bas_gauche[1]) ** 2))) / largeur_mm  # rayon du cercle sur l'image redressee
-
-seuils_detection = [12, 12, 12]  # B,G,R plus c'est eleve plus la hough gradient transform va detecter de cercles
-
-aire_detection_contour = (
-    0.8 * 3.14 * rayon_cercle_px ** 2,
-    1.2 * 3.14 * rayon_cercle_px ** 2)  # Aire min, AireMax 0.75 coeff rectificateur, 0.8/1.2 : +- 20%
-
-seuil_thresh = 155  # seuil pour le thresh qui met 0 ou 255 pour chaque composante rgb
 # endregion parametres
 
 if not os.path.isdir("./out"):
     os.mkdir('./out')
 
-file=open('pos_palets_mm.txt','w')
+file = open('pos_palets_mm.txt', 'w')
 file.write('')
 file.close()
 ###################
@@ -115,7 +118,7 @@ file.close()
 # region Aquisition de l'image
 camera = PiCamera()
 rawCapture = PiRGBArray(camera)
-camera.resolution = (480,360)#(3280,2464)
+camera.resolution = (480, 360)  # (3280,2464)
 camera.capture(rawCapture, format="bgr")
 sleep(0.1)
 image = rawCapture.array
@@ -139,7 +142,8 @@ cv2.imwrite('./out/resized.jpg', image)
 
 
 # region redressement
-image = four_point_transform(image, np.array([haut_gauche, haut_droite, bas_gauche, bas_droite], np.float32),hauteur_mm,largeur_mm)
+image = four_point_transform(image, np.array([haut_gauche, haut_droite, bas_gauche, bas_droite], np.float32),
+                             hauteur_mm, largeur_mm)
 # endregion redressement
 cv2.imwrite('./out/redressement.jpg', image)
 
@@ -169,11 +173,11 @@ colors_string = ('b', 'g', 'r')
 for i in range(3):
     mask = cv2.inRange(thresh, masks_colors[i], masks_colors[i])  # On conserve uniquement la couleur
     _, contours, _ = cv2.findContours(mask, cv2.RETR_TREE,
-                                   cv2.CHAIN_APPROX_SIMPLE)  # On prend les countours des formes
+                                      cv2.CHAIN_APPROX_SIMPLE)  # On prend les countours des formes
     mask = np.zeros(np.shape(mask), np.uint8)  # Creation du masque final pour l'instant vierge
 
     for c in contours:
-        #prrint(cv2.contourArea(c))
+        # prrint(cv2.contourArea(c))
         if aire_detection_contour[0] < cv2.contourArea(c) < aire_detection_contour[
             1]:  # on ne garde que les contours d'aire convenable
             c = [c]
